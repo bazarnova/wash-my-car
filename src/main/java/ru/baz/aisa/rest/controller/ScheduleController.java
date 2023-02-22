@@ -17,18 +17,21 @@ import java.util.List;
 public class ScheduleController {
     private final ScheduleService scheduleService;
 
+    @ApiOperation(value = "Add new slots in schedule", notes = "Returns created slots")
     @PutMapping("/schedule")
     public ResponseEntity<SlotResponse> save(@RequestBody ScheduleServiceRequest request) {
         SlotResponse slotResponse = scheduleService.addNewSlot(request);
         return new ResponseEntity<>(slotResponse, HttpStatus.OK);
     }
 
+    @ApiOperation(value = "Get available slots in the specified period", notes = "Returns empty slots")
     @GetMapping("/schedule")
     public ResponseEntity<List<SlotResponse>> getAvailableSlots(@RequestParam("days") Integer days) {
         List<SlotResponse> slotResponses = scheduleService.getSlotsForPeriod(days);
         return new ResponseEntity<>(slotResponses, HttpStatus.OK);
     }
 
+    @ApiOperation(value = "Get reserved slots for the user", notes = "Returns reserved slots")
     @GetMapping("/schedule/user/{id}")
     public ResponseEntity<List<SlotResponse>> getSlotsForUser(@PathVariable Long id) {
         List<SlotResponse> slotResponses = scheduleService.getSlotsForUser(id);

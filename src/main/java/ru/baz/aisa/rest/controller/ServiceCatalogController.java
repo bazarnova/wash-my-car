@@ -1,5 +1,6 @@
 package ru.baz.aisa.rest.controller;
 
+import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ public class ServiceCatalogController {
 
     private final ApplicationProperties applicationProperties;
 
+    @ApiOperation(value = "Get list of services", notes = "List of all services")
     @GetMapping("/services")
     public ResponseEntity<List<ServiceResponse>> getServiceList() {
         List<ServiceResponse> serviceList = serviceCatalogService.getActiveServices();
@@ -26,6 +28,7 @@ public class ServiceCatalogController {
         return new ResponseEntity<>(serviceList, HttpStatus.OK);
     }
 
+    @ApiOperation(value = "Add new service", notes = "Return created service")
     @PutMapping("/service")
     public  ResponseEntity<ServiceResponse> addService(@RequestBody ServiceRequest request,
                                                        @RequestParam String token) {
@@ -36,6 +39,7 @@ public class ServiceCatalogController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
+    @ApiOperation(value = "Remove the service", notes = "Return http status")
     @DeleteMapping("/service/{id}")
     public  ResponseEntity<ServiceResponse> removeService(@PathVariable Long id) {
 
