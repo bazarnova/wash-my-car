@@ -28,7 +28,6 @@ public class UserService {
         return user;
     }
 
-
     @Transactional
     public User createUser(String userName, String userPhone) {
         User user = new User(null, userName, userPhone);

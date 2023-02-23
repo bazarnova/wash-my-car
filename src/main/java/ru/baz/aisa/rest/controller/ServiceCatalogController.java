@@ -12,6 +12,7 @@ import ru.baz.aisa.rest.response.ServiceResponse;
 import ru.baz.aisa.service.ServiceCatalogService;
 
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @RestController
@@ -22,8 +23,8 @@ public class ServiceCatalogController {
 
     @ApiOperation(value = "Get list of services", notes = "List of all services")
     @GetMapping("/services")
-    public ResponseEntity<List<ServiceResponse>> getServiceList() {
-        List<ServiceResponse> serviceList = serviceCatalogService.getActiveServices();
+    public ResponseEntity<Map<String, List<ServiceResponse>>> getServiceList() {
+        Map<String, List<ServiceResponse>> serviceList = serviceCatalogService.getActiveServices();
 
         return new ResponseEntity<>(serviceList, HttpStatus.OK);
     }

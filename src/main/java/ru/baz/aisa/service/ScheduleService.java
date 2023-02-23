@@ -8,7 +8,6 @@ import ru.baz.aisa.entity.Service;
 import ru.baz.aisa.entity.User;
 import ru.baz.aisa.repository.ScheduleRepository;
 import ru.baz.aisa.rest.request.ScheduleServiceRequest;
-import ru.baz.aisa.rest.response.SlotResponse;
 import ru.baz.aisa.rest.response.SlotStepResponse;
 
 import java.time.LocalDate;
@@ -28,8 +27,8 @@ public class ScheduleService {
 
 
     @Transactional
-    public List<SlotResponse> getSlotsForPeriod(Integer days) {
-        List<SlotResponse> result = new ArrayList<>();
+    public Map<LocalDate, List<SlotStepResponse>> getSlotsForPeriod(Integer days) {
+        Map<LocalDate, List<SlotStepResponse>> result = new HashMap<>();
         List<Schedule> responses = scheduleRepository.getScheduleForPeriod(LocalDate.now(), LocalDate.now().plusDays(days));
         Map<LocalDate, List<Schedule>> map = responses.stream().collect(Collectors.groupingBy(Schedule::getDate));
 
@@ -42,15 +41,16 @@ public class ScheduleService {
                     .filter(slotIsNotBusy)
                     .map(integer -> new SlotStepResponse(integer, slotHelperService.formattedSlot(integer, offset), null))
                     .collect(Collectors.toList());
-            result.add(new SlotResponse(offset, list));
+
+            result.put(offset, list);
         }
 
         return result;
     }
 
     @Transactional
-    public List<SlotResponse> getSlotsForUser(Long id) {
-        List<SlotResponse> result = new ArrayList<>();
+    public Map<LocalDate, List<SlotStepResponse>> getSlotsForUser(Long id) {
+        Map<LocalDate, List<SlotStepResponse>> result = new HashMap<>();
         List<Schedule> list = scheduleRepository.getAllByUserIdAndDateIsGreaterThanEqual(id, LocalDate.now());
 
         Map<LocalDate, List<Schedule>> map = list.stream().collect(Collectors.groupingBy(Schedule::getDate));
@@ -60,8 +60,6 @@ public class ScheduleService {
                     .flatMap(schedule -> Arrays.stream(schedule.getSlots()))
                     .collect(Collectors.toList());
 
-            SlotResponse slotResponse = new SlotResponse();
-            slotResponse.setDate(key);
             List<SlotStepResponse> stepResponses = slotsForDay.stream()
                     .map(integer -> {
                         Schedule scheduleWithSlotId = map.get(key).stream().filter(schedule -> Arrays.asList(schedule.getSlots()).contains(integer)).findFirst().orElse(null);
@@ -69,14 +67,13 @@ public class ScheduleService {
                         return new SlotStepResponse(integer, slotHelperService.formattedSlot(integer, key), serviceId);
                     })
                     .collect(Collectors.toList());
-            slotResponse.setTimeSlots(stepResponses);
-            result.add(slotResponse);
+            result.put(key, stepResponses);
         }
         return result;
     }
 
     @Transactional
-    public SlotResponse addNewSlot(ScheduleServiceRequest request) {
+    public Map<LocalDate, List<SlotStepResponse>> addNewSlot(ScheduleServiceRequest request) {
         User user = userService.getOrCreateUser(request.getUserName(), request.getUserPhone());
         List<Service> serviceFromRequest = serviceCatalogService.getServices(request.getServiceIds());
 
@@ -89,7 +86,6 @@ public class ScheduleService {
                 throw new RuntimeException("Cannot schedule in the past");
             }
         }
-
 
         Map<Long, List<Integer>> slotsByServiceId = new HashMap<>();
         int startFrom = request.getStartSlot();
@@ -123,10 +119,8 @@ public class ScheduleService {
                     .forEach(integer -> stepResponses.add(new SlotStepResponse(integer, slotHelperService.formattedSlot(integer, request.getDate()), service.getId())));
         }
 
-        SlotResponse response = new SlotResponse();
-        response.setDate(request.getDate());
-
-        response.setTimeSlots(stepResponses);
+        Map<LocalDate, List<SlotStepResponse>> response = new HashMap<>();
+        response.put(request.getDate(), stepResponses);
 
         return response;
     }

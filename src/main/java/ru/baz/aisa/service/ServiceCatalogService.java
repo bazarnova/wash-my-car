@@ -8,6 +8,7 @@ import ru.baz.aisa.repository.ServiceCatalogRepository;
 import ru.baz.aisa.rest.response.ServiceResponse;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
@@ -18,12 +19,14 @@ public class ServiceCatalogService {
     private final ServiceHelperService serviceHelperService;
 
     @Transactional
-    public List<ServiceResponse> getActiveServices() {
+    public Map<String, List<ServiceResponse>> getActiveServices() {
         List<Service> services = serviceCatalogRepository.findByActiveIsTrue();
 
-        return services.stream()
+        List<ServiceResponse> serviceResponses = services.stream()
                 .map(serviceHelperService::map)
                 .collect(Collectors.toList());
+
+        return serviceResponses.stream().collect(Collectors.groupingBy(ServiceResponse::getName));
     }
 
     @Transactional

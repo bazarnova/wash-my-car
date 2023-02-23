@@ -16,5 +16,8 @@ public class ApplicationProperties {
     private int slotPerDay;
     private String dateFormat;
     private String dateFormatSlot;
-    private Duration slotDuration = Duration.ofMinutes(15);
+    private Duration slotDuration;
+    private int dateStartHour;
+    private int dateStartMinute;
+    private int dateStartSecond;
 }

@@ -24,12 +24,18 @@ public class SlotHelperService {
 
     public LocalDateTime fromSlotAndDate(Integer slotNumber, LocalDate date) {
         long minutes = applicationProperties.getSlotDuration().multipliedBy(slotNumber).toMinutes();
-        return LocalDateTime.of(date, LocalTime.of(0, 0, 0).plusMinutes(minutes));
+        int hour = applicationProperties.getDateStartHour();
+        int minute = applicationProperties.getDateStartMinute();
+        int second = applicationProperties.getDateStartSecond();
+        return LocalDateTime.of(date, LocalTime.of(hour, minute, second).plusMinutes(minutes));
     }
 
     public String formattedSlot(Integer slotNumber, LocalDate date) {
         long minutes = applicationProperties.getSlotDuration().multipliedBy(slotNumber).toMinutes();
-        return LocalDateTime.of(date, LocalTime.of(0, 0, 0).plusMinutes(minutes)).format(slotDateTimeFormatter);
+        int hour = applicationProperties.getDateStartHour();
+        int minute = applicationProperties.getDateStartMinute();
+        int second = applicationProperties.getDateStartSecond();
+        return LocalDateTime.of(date, LocalTime.of(hour, minute, second).plusMinutes(minutes)).format(slotDateTimeFormatter);
     }
 
     public String formattedDuration(Integer slots) {
