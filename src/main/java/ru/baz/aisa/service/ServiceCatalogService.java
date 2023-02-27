@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.baz.aisa.entity.Service;
+import ru.baz.aisa.exception.ApplicationException;
 import ru.baz.aisa.repository.ServiceCatalogRepository;
 import ru.baz.aisa.rest.response.ServiceResponse;
 
@@ -38,7 +39,7 @@ public class ServiceCatalogService {
         try {
             serviceCatalogRepository.saveAndFlush(service);
         } catch (Exception ex) {
-            throw new RuntimeException("Name " + name + " cannot be used");
+            throw new ApplicationException("Name " + name + " cannot be used");
         }
         return serviceHelperService.map(service);
     }
@@ -49,7 +50,7 @@ public class ServiceCatalogService {
             Service service = serviceCatalogRepository.findById(id).orElse(null);
             serviceCatalogRepository.delete(service);
         } catch (Exception ex) {
-            throw new RuntimeException(ex.getMessage());
+            throw new ApplicationException(ex.getMessage());
         }
     }
 

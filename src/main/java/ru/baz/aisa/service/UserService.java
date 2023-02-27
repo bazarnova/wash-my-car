@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.baz.aisa.entity.User;
+import ru.baz.aisa.exception.ApplicationException;
 import ru.baz.aisa.repository.UserRepository;
 
 @Component
@@ -22,7 +23,7 @@ public class UserService {
         }
 
         if (user == null) {
-            throw new RuntimeException("User is not found and cannot be created");
+            throw new ApplicationException("User is not found and cannot be created");
         }
 
         return user;

@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
-@Controller
+@RestController
 public class ScheduleController {
     private final ScheduleService scheduleService;
 

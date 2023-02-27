@@ -1,11 +1,13 @@
 package ru.baz.aisa.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.baz.aisa.entity.Schedule;
 import ru.baz.aisa.entity.Service;
 import ru.baz.aisa.entity.User;
+import ru.baz.aisa.exception.ApplicationException;
 import ru.baz.aisa.repository.ScheduleRepository;
 import ru.baz.aisa.rest.request.ScheduleServiceRequest;
 import ru.baz.aisa.rest.response.SlotStepResponse;
@@ -13,17 +15,20 @@ import ru.baz.aisa.rest.response.SlotStepResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 @Component
+@Slf4j
 public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final UserService userService;
     private final SlotHelperService slotHelperService;
     private final ServiceCatalogService serviceCatalogService;
+    private final ConcurrentHashMap<LocalDate, Object> locks = new ConcurrentHashMap<>();
 
 
     @Transactional
@@ -74,53 +79,59 @@ public class ScheduleService {
 
     @Transactional
     public Map<LocalDate, List<SlotStepResponse>> addNewSlot(ScheduleServiceRequest request) {
-        User user = userService.getOrCreateUser(request.getUserName(), request.getUserPhone());
-        List<Service> serviceFromRequest = serviceCatalogService.getServices(request.getServiceIds());
-
-        int totalSlotsNeeded = serviceFromRequest.stream().map(Service::getSlots).mapToInt(Integer::intValue).sum();
-        List<Integer> slotsNeeded = Stream.iterate(request.getStartSlot(), i -> i + 1).limit(totalSlotsNeeded).collect(Collectors.toList());
-
-        for (Integer integer : slotsNeeded) {
-            LocalDateTime dateTimeForSlot = slotHelperService.fromSlotAndDate(integer, request.getDate());
-            if (LocalDateTime.now().isAfter(dateTimeForSlot)) {
-                throw new RuntimeException("Cannot schedule in the past");
-            }
-        }
-
-        Map<Long, List<Integer>> slotsByServiceId = new HashMap<>();
-        int startFrom = request.getStartSlot();
-        for (Service service : serviceFromRequest) {
-            List<Integer> slotsNeededForService = Stream.iterate(startFrom, i -> i + 1).limit(service.getSlots()).collect(Collectors.toList());
-            slotsByServiceId.put(service.getId(), slotsNeededForService);
-            startFrom = startFrom + service.getSlots();
-        }
-
-        //TODO lock date for update
-        List<Schedule> scheduleListForDate = scheduleRepository.getSchedulesByDate(request.getDate());
-        for (Schedule schedule : scheduleListForDate) {
-            if (Arrays.stream(schedule.getSlots()).anyMatch(slotsNeeded::contains)) {
-                throw new RuntimeException("Slots are busy choose another.");
-            }
-        }
-
-        List<SlotStepResponse> stepResponses = new ArrayList<>();
-        for (Service service : serviceFromRequest) {
-            Schedule schedule = new Schedule();
-            schedule.setDate(request.getDate());
-            schedule.setUserId(user.getId());
-            schedule.setServiceId(service.getId());
-
-            Integer[] slotsArr = slotsByServiceId.get(service.getId()).toArray(new Integer[0]);
-            schedule.setSlots(slotsArr);
-
-            scheduleRepository.saveAndFlush(schedule);
-
-            slotsByServiceId.get(service.getId())
-                    .forEach(integer -> stepResponses.add(new SlotStepResponse(integer, slotHelperService.formattedSlot(integer, request.getDate()), service.getId())));
-        }
+        Object lock = locks.computeIfAbsent(request.getDate(), k -> new Object());
 
         Map<LocalDate, List<SlotStepResponse>> response = new HashMap<>();
-        response.put(request.getDate(), stepResponses);
+        synchronized (lock) {
+
+            User user = userService.getOrCreateUser(request.getUserName(), request.getUserPhone());
+            List<Service> serviceFromRequest = serviceCatalogService.getServices(request.getServiceIds());
+
+            int totalSlotsNeeded = serviceFromRequest.stream().map(Service::getSlots).mapToInt(Integer::intValue).sum();
+            List<Integer> slotsNeeded = Stream.iterate(request.getStartSlot(), i -> i + 1).limit(totalSlotsNeeded).collect(Collectors.toList());
+
+            for (Integer integer : slotsNeeded) {
+                LocalDateTime dateTimeForSlot = slotHelperService.fromSlotAndDate(integer, request.getDate());
+                if (LocalDateTime.now().isAfter(dateTimeForSlot)) {
+                    throw new ApplicationException("Cannot schedule in the past");
+                }
+            }
+
+            Map<Long, List<Integer>> slotsByServiceId = new HashMap<>();
+            int startFrom = request.getStartSlot();
+            for (Service service : serviceFromRequest) {
+                List<Integer> slotsNeededForService = Stream.iterate(startFrom, i -> i + 1).limit(service.getSlots()).collect(Collectors.toList());
+                slotsByServiceId.put(service.getId(), slotsNeededForService);
+                startFrom = startFrom + service.getSlots();
+            }
+
+            List<Schedule> scheduleListForDate = scheduleRepository.getSchedulesByDate(request.getDate());
+            for (Schedule schedule : scheduleListForDate) {
+                if (Arrays.stream(schedule.getSlots()).anyMatch(slotsNeeded::contains)) {
+                    throw new ApplicationException("Slots are busy choose another.");
+                }
+            }
+
+            List<SlotStepResponse> stepResponses = new ArrayList<>();
+            for (Service service : serviceFromRequest) {
+                Schedule schedule = new Schedule();
+                schedule.setDate(request.getDate());
+                schedule.setUserId(user.getId());
+                schedule.setServiceId(service.getId());
+
+                Integer[] slotsArr = slotsByServiceId.get(service.getId()).toArray(new Integer[0]);
+                schedule.setSlots(slotsArr);
+
+                scheduleRepository.saveAndFlush(schedule);
+
+                slotsByServiceId.get(service.getId())
+                        .forEach(integer -> stepResponses.add(new SlotStepResponse(integer, slotHelperService.formattedSlot(integer, request.getDate()), service.getId())));
+            }
+
+            response.put(request.getDate(), stepResponses);
+        }
+
+        log.info("Response = {}", response);
 
         return response;
     }

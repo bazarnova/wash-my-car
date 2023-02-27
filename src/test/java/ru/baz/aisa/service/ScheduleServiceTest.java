@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import ru.baz.aisa.config.ApplicationProperties;
 import ru.baz.aisa.rest.request.ScheduleServiceRequest;
@@ -29,6 +30,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @ActiveProfiles("test")
@@ -82,7 +87,7 @@ class ScheduleServiceTest {
                 new HttpEntity<>(request), Map.class);
         Assertions.assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
 
-        Map<LocalDate, List<SlotStepResponse>> body = (Map<LocalDate, List<SlotStepResponse>>)responseEntity.getBody();
+        Map<LocalDate, List<SlotStepResponse>> body = (Map<LocalDate, List<SlotStepResponse>>) responseEntity.getBody();
         List<SlotStepResponse> slots = body.get(date.toString());
         Assertions.assertEquals(5, slots.size());
     }
@@ -271,7 +276,7 @@ class ScheduleServiceTest {
         serviceRequest.setName("Тонировка зеркала заднего вида");
         serviceRequest.setSlots(1);
 
-        ResponseEntity<ServiceResponse> response = restTemplate.exchange(url + "/service?token="+ applicationProperties.getToken(),
+        ResponseEntity<ServiceResponse> response = restTemplate.exchange(url + "/service?token=" + applicationProperties.getToken(),
                 HttpMethod.PUT, new HttpEntity<>(serviceRequest), ServiceResponse.class);
         Long id = response.getBody().getId();
 
@@ -300,5 +305,43 @@ class ScheduleServiceTest {
         ResponseEntity<Map> secondResponse = restTemplate.getForEntity(url + "/services", Map.class);
 
         Assertions.assertEquals(firstResponse.getBody().size() + 1, secondResponse.getBody().size());
+    }
+
+    @Test
+    public void testRequestForCreateConcurrency() throws InterruptedException {
+        int NUMBER_OF_THREADS = 10;
+
+        ExecutorService service = Executors.newFixedThreadPool(NUMBER_OF_THREADS);
+        CountDownLatch latch = new CountDownLatch(NUMBER_OF_THREADS);
+        LocalDate date = LocalDate.now().plusDays(1);
+        for (int i = 0; i < NUMBER_OF_THREADS; i++) {
+            service.submit(getTask(latch, date, i));
+        }
+        latch.await();
+
+        Integer count = jdbcTemplate.queryForObject("select count(*) from wash_my_car.schedule where date = '" + date + "'", Integer.class);
+
+        Assertions.assertEquals(2, count);
+    }
+
+    private Runnable getTask(CountDownLatch latch, LocalDate date, final int finalI) {
+        return () -> {
+            RestTemplate restTemplate = new RestTemplate();
+
+            String url = "http://localhost:" + port;
+
+            ScheduleServiceRequest request = new ScheduleServiceRequest();
+            request.setUserName("Ivanov");
+            request.setUserPhone("01234567890" + finalI);
+            request.setDate(date);
+            request.setStartSlot(60);
+            request.setServiceIds(Arrays.asList(2L, 3L));
+
+            ResponseEntity<Map> response = restTemplate.exchange(url + "/schedule", HttpMethod.PUT,
+                    new HttpEntity<>(request), Map.class);
+
+            log.info("response {} {}", finalI, response.getBody());
+            latch.countDown();
+        };
     }
 }
